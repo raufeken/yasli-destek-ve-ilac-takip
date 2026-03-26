@@ -1,0 +1,26 @@
+{
+    "functions": {
+        "source": "functions",
+        "runtime": "nodejs20"
+    },
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "yasli-destek-sistemi-469af",
+                    "appId": "1:301603496019:android:eef42a8854c11f2d38e6a6",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "yasli-destek-sistemi-469af",
+                    "configurations": {
+                        "android": "1:301603496019:android:eef42a8854c11f2d38e6a6",
+                        "ios": "1:301603496019:ios:bebdf73495aab58e38e6a6"
+                    }
+                }
+            }
+        }
+    }
+}

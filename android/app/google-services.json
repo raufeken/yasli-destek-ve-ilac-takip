@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "301603496019",
+    "project_id": "yasli-destek-sistemi-469af",
+    "storage_bucket": "yasli-destek-sistemi-469af.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:301603496019:android:eef42a8854c11f2d38e6a6",
+        "android_client_info": {
+          "package_name": "com.raufeken.yasli_destek_sistemi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAydQ4eIUMYyNTnFN5Rtpz5DVLkCcmc8Sw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:301603496019:android:5a9263891288bc4d38e6a6",
+        "android_client_info": {
+          "package_name": "com.raufeken.yaslidestek"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAydQ4eIUMYyNTnFN5Rtpz5DVLkCcmc8Sw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
