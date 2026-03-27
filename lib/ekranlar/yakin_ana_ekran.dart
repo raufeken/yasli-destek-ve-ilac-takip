@@ -6,7 +6,6 @@ import 'ilac_ekleme_ekrani.dart';
 import 'splash_ekrani.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// JÜRİ İÇİN NOT: Sağlık Gözlemcisi ekranı, takip ettiği Büyüklerimiz'in
 // ilaçlarını gerçek zamanlı StreamBuilder ile gösterir.
 // Firestore N:N ilişkisi: 'takipEdilenler' listesi birden fazla büyük UID'si
 // içerebilir. Her büyük için ayrı bir Stream açılır.
@@ -61,7 +60,7 @@ class _YakinAnaEkranState extends State<YakinAnaEkran> {
     }
   }
 
-  // JÜRİ İÇİN NOT: linkRelativeWithElderly, Firebase Transaction kullanır.
+
   // Hem büyüğün 'takipciIdleri' hem gözlemcinin 'takipEdilenler' listesi
   // aynı Transaction'da güncellenir — atomik işlem garantisi.
   void _eslesmeDialoguGoster() {
@@ -212,7 +211,7 @@ class _YakinAnaEkranState extends State<YakinAnaEkran> {
         ],
       ),
 
-      // JÜRİ İÇİN NOT: "Büyüğümü Bağla" formu ana ekrandan Drawer'a taşındı.
+     
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -577,7 +576,7 @@ class _YakinAnaEkranState extends State<YakinAnaEkran> {
     );
   }
 
-  // JÜRİ İÇİN NOT: sonDurum badge'i (rozeti), Sağlık Gözlemcisi'ne büyüğünün
+  
   // günlük ilaç uyumunu tek bakışta gösterir.
   //
   // UNHAPPY PATH:
@@ -756,7 +755,7 @@ class _YakinAnaEkranState extends State<YakinAnaEkran> {
                   ),
                 ),
 
-                // JÜRİ İÇİN NOT (Unhappy Path — Alarm Rozeti):
+               
                 if (alarmDurum)
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -789,7 +788,7 @@ class _YakinAnaEkranState extends State<YakinAnaEkran> {
                     ),
                   ),
 
-                // JÜRİ İÇİN NOT (Unhappy Path — Stok Kritik):
+        
                 if (stokKritik)
                   Container(
                     padding: const EdgeInsets.symmetric(

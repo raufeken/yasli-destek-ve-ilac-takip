@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// JÜRİ İÇİN NOT: enum kullanımı, 'magic string' hatalarını derleme zamanında engeller.
+
 // Firestore'da String olarak saklanır; bu sayede veri tabanı bağımsızlığı korunur.
 /// İlaç formlarını tip-güvenli şekilde temsil eden sabit
 /// Firestore'da String olarak saklanır
@@ -37,7 +37,7 @@ class IlacOgun {
   static const List<String> tumOgunler = [sabah, ogle, aksam, gece];
 }
 
-// JÜRİ İÇİN NOT: Olası durum değerlerini sabit olarak tanımlıyoruz.
+
 // Bu sayede UI katmanı ve Firestore arasında tutarsız String yazımı riski sıfıra iner.
 // 'atlandi' yeni standarttır; backward compatibility için fromMap'te 'atildi' de kabul edilir.
 /// İlacın günlük kullanım durumunu temsil eden durum sabitleri
@@ -48,7 +48,6 @@ class IlacDurum {
   /// Büyüklerimiz ilacı içtiğini onayladı
   static const String icildi = 'icildi';
 
-  // JÜRİ İÇİN NOT: 'atildi' → 'atlandi' olarak güncellendi.
   // Geriye dönük uyumluluk: fromMap fonksiyonunda eski 'atildi' kayıtları
   // otomatik olarak 'atlandi'ya normalize edilir.
   /// Büyüklerimiz o öğünde atladığını bildirdi
@@ -62,8 +61,7 @@ class IlacDurum {
 ///
 /// Bitiş tarihi ve stok uyarı tarihi, stok miktarı + öğün sayısından otomatik hesaplanır.
 /// Hem [fromMap] (Firestore'dan okuma) hem [hesaplaVeOlustur] (yeni kayıt) factory kullanır.
-///
-// JÜRİ İÇİN NOT: N:1 ilişki mimarisi — her ilaç yalnızca bir büyüğe ait (yasliId Foreign Key).
+
 // Bu tasarım, ileride çoklu büyük desteğine geçişi kolaylaştırır.
 /// Firestore koleksiyonu: `Ilaclar`
 /// İlişki: Her ilaç yalnızca bir yaşlıya ait → [yasliId] Foreign Key
@@ -74,7 +72,6 @@ class MedicineModel {
   /// Bu ilacın ait olduğu yaşlı kullanıcının Firebase UID'si
   final String yasliId;
 
-  // JÜRİ İÇİN NOT: ekleyenRol alanı 'Yasli' veya 'Yakin' String'i taşır.
   // Bu değerler Firestore'daki rol sorgu filtresiyle örtüşür; asla UI'daki
   // görünen isme dönüştürülmez. Veri=veri, UI=UI ayrımı bilinçli tercih.
   /// İlacı kim ekledi: 'Yasli' veya 'Yakin' (Firestore rol alanıyla eşleşir)
@@ -96,7 +93,7 @@ class MedicineModel {
   /// Kutu/şişedeki toplam hap / ölçek sayısı
   final int stokMiktari;
 
-  // JÜRİ İÇİN NOT: kullanimDozu, stok azaltma işleminde kullanılır.
+
   // Her ilaç alımında stokMiktari -= kullanimDozu formülü uygulanır.
   // Bu sayede yarım tablet, çift doz vb. senaryolar desteklenir.
   /// Her içimde stoktan düşülecek miktar (varsayılan: 1)
@@ -116,7 +113,6 @@ class MedicineModel {
   /// false yapılarak ilaç "silinmiş" (soft delete) olarak işaretlenir
   final bool aktif;
 
-  // JÜRİ İÇİN NOT: sonDurum alanı, ilaç silme yerine "soft state update" yaklaşımını
   // uygular. Büyüklerimizin geçmiş davranışı Firestore'da korunur; Sağlık Gözlemcisi
   // bu geçmişi her zaman görebilir. Veri silerek değil, güncelleyerek çalışıyoruz.
   /// İlacın son kullanım durumu: 'bekleniyor' | 'icildi' | 'atlandi' | 'zaman_asimi'
@@ -200,7 +196,7 @@ class MedicineModel {
 
   /// Firestore dökümanını [MedicineModel] nesnesine dönüştürür
   ///
-  // JÜRİ İÇİN NOT: fromMap fabrika metodunda null-safety operatörleri (??),
+
   // Firestore'dan eksik gelen alanları çökmeden yönetir. Gerçek dünya verisi
   // her zaman tam ve eksiksiz gelmez; bu yüzden defensive coding zorunludur.
   //
@@ -216,7 +212,7 @@ class MedicineModel {
       return varsayilan;
     }
 
-    // JÜRİ İÇİN NOT: Geriye dönük uyumluluk — eski 'atildi' değeri
+    
     // yeni 'atlandi' standardına dönüştürülür. Uygulama hiçbir zaman çökmez.
     String sonDurumNormalize(String? deger) {
       if (deger == null) return IlacDurum.bekleniyor;
@@ -299,7 +295,7 @@ class MedicineModel {
   }
 
   /// Belirli alanları değiştirerek yeni bir kopya döndürür (immutable pattern)
-  // JÜRİ İÇİN NOT: copyWith, nesneyi değiştirmek yerine yeni bir kopya üretir.
+  
   // Bu "immutable" yaklaşım Flutter'da setState + rebuild döngüsünü öngörülebilir kılar,
   // hata ayıklamayı kolaylaştırır.
   MedicineModel copyWith({

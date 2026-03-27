@@ -42,7 +42,6 @@ class IlacEklemeEkrani extends StatefulWidget {
   State<IlacEklemeEkrani> createState() => _IlacEklemeEkraniState();
 }
 
-// JÜRİ İÇİN NOT: "Barkod Okut" seçeneği tamamen kaldırıldı.
 // Yalnızca "Akıllı Tarama (OCR)" ve "Elle Giriş" kaldı.
 /// İlaç giriş yöntemi seçenekleri (barkod kaldırıldı)
 enum _GirisYontemi { akilli, elle }
@@ -105,7 +104,6 @@ class _IlacEklemeEkraniState extends State<IlacEklemeEkrani> {
     }
   }
 
-  // JÜRİ İÇİN NOT: OCR servisi çağrıldıktan sonra okunan metin
   // otomatik olarak İlaç Adı alanına yazılır ve giriş yöntemi "Elle Giriş"e
   // geçer — kullanıcı OCR çıktısını düzenleyebilir.
   Future<void> _ocrBaslat() async {
@@ -140,7 +138,6 @@ class _IlacEklemeEkraniState extends State<IlacEklemeEkrani> {
     }
   }
 
-  // JÜRİ İÇİN NOT: Yerel bildirim placeholder — flutter_local_notifications
   // ile tam entegrasyon ileride yapılacaktır.
   void _yerelBildirimKur(String ilacAdi, List<String> ogunler) {
     debugPrint(
@@ -207,7 +204,6 @@ class _IlacEklemeEkraniState extends State<IlacEklemeEkrani> {
 
   // ---------- UI YARDIMCI WIDGETLERİ ----------
 
-  // JÜRİ İÇİN NOT: Barkod kaldırıldı. Yalnızca OCR + Elle Giriş —
   // Expanded ile yan yana simetrik butonlar.
   Widget _girisYontemiSec() {
     return Row(
@@ -618,8 +614,6 @@ class _IlacEklemeEkraniState extends State<IlacEklemeEkrani> {
         ),
         const SizedBox(height: 16),
 
-        // JÜRİ İÇİN NOT: kullanimDozu alanı, her ilaç alımında stoktan
-        // düşülecek miktarı belirler.
         TextFormField(
           controller: _kullanimDozuKontroller,
           keyboardType: TextInputType.number,

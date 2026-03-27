@@ -449,7 +449,7 @@ class FirestoreService {
       });
       debugPrint('FCM token guncellendi: $uid');
     } catch (e) {
-      // Token guncelleme hatasi kritik degil; sessizce logla
+    
       debugPrint('FCM token guncelleme hatasi: $e');
     }
   }
@@ -509,7 +509,6 @@ class FirestoreService {
         });
   }
 
-  // JÜRİ İÇİN NOT: ilacDurumGuncelle, sonDurum ve stokMiktari'nı tek Firestore
   // write işleminde günceller. Bu sayede ağ hatası durumunda yarı-yazma riski
   // minimuma iner. FieldValue.increment(-n) ile atomik azaltma sağlanır.
   /// İlacın durumunu günceller ve opsiyonel olarak stoktan düşer

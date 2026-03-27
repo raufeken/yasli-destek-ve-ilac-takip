@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'telefon_giris_ekrani.dart';
 
-// JÜRİ İÇİN NOT: Orijinal Material Design teması korundu.
+ 
 // 'Yasli' / 'Yakin' string'leri yalnızca Firestore'a yazılır; UI'da
 // 'Büyüklerimiz' ve 'Sağlık Gözlemcisi' gösterilir.
 /// Kullanıcının rolünü seçtiği ilk ekran

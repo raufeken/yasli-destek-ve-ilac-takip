@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
-// JÜRİ İÇİN NOT: OCR servisi, Single Responsibility prensibine uygun olarak
 // yalnızca kameradan görüntü alıp metin çıkarmakla görevlidir.
 // UI mantığı bu servise sızmaz; servis yalnızca String? döndürür.
 
@@ -17,7 +16,6 @@ class OcrService {
   ///
   /// Başarılıysa okunan metin [String] döner, hata veya iptal durumunda null döner.
   ///
-  // JÜRİ İÇİN NOT: ML Kit'in TextRecognizer nesnesi kullanım sonrası close() ile
   // serbest bırakılır. Bu, bellek sızıntısını (memory leak) önler — best practice.
   Future<String?> resimdenMetinOku() async {
     try {

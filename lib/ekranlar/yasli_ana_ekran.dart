@@ -7,7 +7,7 @@ import '../models/medicine_model.dart';
 import 'ilac_ekleme_ekrani.dart';
 import 'splash_ekrani.dart';
 
-// JÜRİ İÇİN NOT: StatefulWidget tercih sebebi — kullanıcı adı ve eşleşme kodu
+
 // initState'te tek seferlik çekilir. Gerçek zamanlı ilaç listesi ise StreamBuilder
 // ile ayrı tutulur; böylece her Firestore değişikliği yalnızca ilgili widget'ı yeniden
 // çizer, tüm sayfa rebuild olmaz.
@@ -61,7 +61,7 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
     }
   }
 
-  // JÜRİ İÇİN NOT: removeFollower, Firebase Transaction kullanır.
+  
   // Hem büyüğün 'takipciIdleri' hem yakının 'takipEdilenler' listesi
   // aynı Transaction'da güncellenir — atomik işlem, veri tutarsızlığı sıfır.
   Future<void> _takipciKaldir(String relativeUid, String relativeIsim) async {
@@ -117,7 +117,7 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
     );
   }
 
-  // JÜRİ İÇİN NOT: Sağlık Gözlemcisi listesi Drawer'a taşındı.
+  
   // Bu sayede ana ekran yalnızca ilaç listesini gösterir — bilişsel yük azalır.
   Widget _takipciSeksiyonu(String yasliUid) {
     return StreamBuilder<DocumentSnapshot>(
@@ -225,7 +225,7 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
     }
   }
 
-  // JÜRİ İÇİN NOT: Firestore'da update() kullanılır; delete() ASLA çağrılmaz.
+ 
   // sonDurum alanı güncellenir — "soft state update" mimarisi.
   //
   // KRİTİK STOK MANTIĞI:
@@ -378,7 +378,6 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
         ],
       ),
 
-      // JÜRİ İÇİN NOT: Drawer (yan menü), eşleşme kodunu ve Sağlık Gözlemcisi
       // listesini ana ekrandan ayırır. Scaffold'un yerleşik mekanizması sayesinde
       // AppBar'ın hamburger simgesi otomatik eklenir.
       drawer: Drawer(
@@ -551,7 +550,6 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
                     ),
                   ),
 
-                  // JÜRİ İÇİN NOT: Expanded + StreamBuilder kombinasyonu.
                   // StreamBuilder gerçek zamanlı dinleme sağlar; setState gerekmez.
                   Expanded(
                     child: StreamBuilder<List<MedicineModel>>(
@@ -637,7 +635,6 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
     );
   }
 
-  // JÜRİ İÇİN NOT: İlaç kartı, sonDurum'a göre dinamik davranış gösterir.
   //
   // KRİTİK MANTIK:
   // 1. baslangicTarihi gelecekteyse → buton gri + tıklanamaz, "Henüz Başlamadı"
@@ -789,7 +786,7 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
             ),
             const SizedBox(height: 10),
 
-            // JÜRİ İÇİN NOT: Aksiyon alındıktan sonra buton KAYBOLUR,
+            
             // yerine tıklanamaz rozet (badge) gelir.
             if (aksiyonAlindi)
               _durumRozeti(ilac.sonDurum)
@@ -825,7 +822,6 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
     );
   }
 
-  // JÜRİ İÇİN NOT: Rozet (badge) sistemi — aksiyondan sonra butonun yerini alır.
   // Yeşil: İçildi, Kırmızı: Atlandı. Tıklanamaz yapıda.
   Widget _durumRozeti(String sonDurum) {
     final bool icildi = sonDurum == IlacDurum.icildi;

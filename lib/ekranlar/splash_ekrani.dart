@@ -5,7 +5,6 @@ import 'rol_secim_ekrani.dart';
 import 'yasli_ana_ekran.dart';
 import 'yakin_ana_ekran.dart';
 
-// JÜRİ İÇİN NOT: Splash ekranı — orijinal mavi temalı Material Design.
 // Kullanıcı oturumu açıksa rol kontrolü yapılarak doğru ekrana yönlendirilir.
 /// Uygulama açıldığında gösterilen bekleme ekranı
 class SplashEkrani extends StatefulWidget {
