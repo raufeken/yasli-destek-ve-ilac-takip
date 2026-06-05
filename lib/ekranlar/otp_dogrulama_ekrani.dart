@@ -27,10 +27,7 @@ class _OtpDogrulamaEkraniState extends State<OtpDogrulamaEkrani> {
     6,
     (index) => TextEditingController(),
   );
-  final List<FocusNode> _focusNodes = List.generate(
-    6,
-    (index) => FocusNode(),
-  );
+  final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
 
   final AuthService _authService = AuthService();
   final FirestoreService _firestoreService = FirestoreService();
@@ -93,6 +90,36 @@ class _OtpDogrulamaEkraniState extends State<OtpDogrulamaEkrani> {
           return;
         }
 
+        //GÜVENLİK KATMANI: ROL ÇATIŞMASI KONTROLÜ
+        if (mevcutRol != widget.secilenRol) {
+          debugPrint(
+            'Güvenlik İhlali: Kayıtlı rol ($mevcutRol) ile seçilen rol (${widget.secilenRol}) uyuşmuyor.',
+          );
+
+          // Kullanıcıyı zorla sistemden çıkarıyoruz ki askıda yetkisiz oturum kalmasın
+          await FirebaseAuth.instance.signOut();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Güvenlik Uyarısı: Bu numara "$mevcutRol" olarak kayıtlıdır. Lütfen doğru giriş panelini kullanın.',
+                ),
+                backgroundColor: Colors.red[800],
+                duration: const Duration(seconds: 4),
+              ),
+            );
+
+            // İçeriği temizleyip kullanıcının tekrar denemesini engelliyoruz
+            for (var c in _otpControllers) {
+              c.clear();
+            }
+            _focusNodes[0].requestFocus();
+          }
+          return; // İşlemi durdur, ana ekrana yönlendirme yapma!
+        }
+
+        // Eğer rol eşleşiyorsa normal şekilde içeri al
         _rolBasiYonlendir(mevcutRol);
       },
       onError: (String hata) {
@@ -121,9 +148,7 @@ class _OtpDogrulamaEkraniState extends State<OtpDogrulamaEkrani> {
             debugPrint('Büyüğümüz ana ekranına yönlendiriliyor...');
             return const YasliAnaEkran();
           } else if (rol == 'Yakin') {
-            debugPrint(
-              'Sağlık Gözlemcisi ana ekranına yönlendiriliyor...',
-            );
+            debugPrint('Sağlık Gözlemcisi ana ekranına yönlendiriliyor...');
             return const YakinAnaEkran();
           } else {
             debugPrint('HATA: Bilinmeyen rol - $rol');
@@ -162,11 +187,7 @@ class _OtpDogrulamaEkraniState extends State<OtpDogrulamaEkrani> {
                     children: [
                       const SizedBox(height: 10),
 
-                      Icon(
-                        Icons.message,
-                        size: 80,
-                        color: Colors.blue[700],
-                      ),
+                      Icon(Icons.message, size: 80, color: Colors.blue[700]),
 
                       const SizedBox(height: 20),
 
@@ -185,10 +206,7 @@ class _OtpDogrulamaEkraniState extends State<OtpDogrulamaEkrani> {
                       Text(
                         '${widget.phoneNumber} numarasına\ngönderilen 6 haneli kodu girin',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 18, color: Colors.grey[600]),
                       ),
 
                       const SizedBox(height: 30),

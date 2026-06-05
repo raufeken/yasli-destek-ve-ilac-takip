@@ -32,6 +32,12 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+*.apk
+
+# Node / Firebase Functions generated files
+node_modules/
+functions/node_modules/
+functions/lib/
 
 # Symbolication related
 app.*.symbols

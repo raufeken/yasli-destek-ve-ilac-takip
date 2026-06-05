@@ -16,6 +16,8 @@ enum EslestirmeSonucu {
   hata,
 }
 
+enum IlacDurumGuncellemeSonucu { basarili, stokYetersiz, zatenIslenmis, hata }
+
 /// Firestore veritabani islemlerini yoneten servis
 class FirestoreService {
   // Singleton deseni
@@ -449,7 +451,6 @@ class FirestoreService {
       });
       debugPrint('FCM token guncellendi: $uid');
     } catch (e) {
-    
       debugPrint('FCM token guncelleme hatasi: $e');
     }
   }
@@ -478,12 +479,16 @@ class FirestoreService {
   ///
   /// Mevcut [ilacSil] ile aynı davranışı sergiler; ancak bağımsız,
   /// çakışmayan imzayla sağlanan alternatif metottur.
+  /// İlacı aktif=false yaparak işaretler (soft delete)
+  /// ve manipüle edilemez sunucu saat damgası vurur.
   Future<bool> ilacModelSil(String ilacId) async {
     try {
       await _firestore.collection('Ilaclar').doc(ilacId).update({
         'aktif': false,
+        //Cihaz saatini değil, mutlak doğru olan sunucu saatini kullanıyorum
+        'silinmeTarihi': FieldValue.serverTimestamp(),
       });
-      debugPrint('MedicineModel silindi (soft): $ilacId');
+      debugPrint('MedicineModel silindi (soft delete & mühürlendi): $ilacId');
       return true;
     } catch (e) {
       debugPrint('MedicineModel silme hatasi: $e');
@@ -509,6 +514,53 @@ class FirestoreService {
         });
   }
 
+  Future<IlacDurumGuncellemeSonucu> ilacDurumGuncelle(
+    String ilacId,
+    String yeniDurum, {
+    int stokDusmesi = 0,
+  }) async {
+    try {
+      final DocumentReference ilacRef = _firestore
+          .collection('Ilaclar')
+          .doc(ilacId);
+
+      return await _firestore.runTransaction((transaction) async {
+        final DocumentSnapshot snapshot = await transaction.get(ilacRef);
+        if (!snapshot.exists) {
+          return IlacDurumGuncellemeSonucu.hata;
+        }
+
+        final Map<String, dynamic> veri =
+            snapshot.data() as Map<String, dynamic>? ?? {};
+        final String mevcutDurum = veri['sonDurum'] as String? ?? 'bekleniyor';
+        if (mevcutDurum == 'icildi' || mevcutDurum == 'atlandi') {
+          return IlacDurumGuncellemeSonucu.zatenIslenmis;
+        }
+
+        final Map<String, dynamic> guncelVeri = {
+          'sonDurum': yeniDurum,
+          'sonDurumZamani': FieldValue.serverTimestamp(),
+        };
+
+        bool stokYetersiz = false;
+        if (yeniDurum == 'icildi' && stokDusmesi > 0) {
+          final int mevcutStok = (veri['stokMiktari'] as num?)?.toInt() ?? 0;
+          final int yeniStok = max(0, mevcutStok - stokDusmesi);
+          stokYetersiz = mevcutStok < stokDusmesi;
+          guncelVeri['stokMiktari'] = yeniStok;
+        }
+
+        transaction.update(ilacRef, guncelVeri);
+        return stokYetersiz
+            ? IlacDurumGuncellemeSonucu.stokYetersiz
+            : IlacDurumGuncellemeSonucu.basarili;
+      });
+    } catch (e) {
+      debugPrint('Ilac durum guncelleme hatasi: $e');
+      return IlacDurumGuncellemeSonucu.hata;
+    }
+  }
+
   // write işleminde günceller. Bu sayede ağ hatası durumunda yarı-yazma riski
   // minimuma iner. FieldValue.increment(-n) ile atomik azaltma sağlanır.
   /// İlacın durumunu günceller ve opsiyonel olarak stoktan düşer
@@ -516,26 +568,50 @@ class FirestoreService {
   /// [ilacId]: Güncellenecek ilacın Firestore döküman ID'si
   /// [yeniDurum]: IlacDurum sabitlerinden biri ('icildi', 'atlandi', 'zaman_asimi')
   /// [stokDusmesi]: Düşülecek stok miktarı (0 ise stok değişmez)
-  Future<bool> ilacDurumGuncelle(
+  Future<dynamic> ilacDurumGuncelleEski(
     String ilacId,
     String yeniDurum, {
     int stokDusmesi = 0,
   }) async {
     try {
-      final Map<String, dynamic> guncelVeri = {
-        'sonDurum': yeniDurum,
-        'sonDurumZamani': FieldValue.serverTimestamp(),
-      };
-
-      // Stok düşmesi varsa atomik olarak azalt
-      if (stokDusmesi > 0) {
-        guncelVeri['stokMiktari'] = FieldValue.increment(-stokDusmesi);
-      }
-
-      await _firestore
+      final DocumentReference ilacRef = _firestore
           .collection('Ilaclar')
-          .doc(ilacId)
-          .update(guncelVeri);
+          .doc(ilacId);
+     
+      await _firestore.runTransaction((
+        transaction,
+      ) async {
+        final DocumentSnapshot snapshot = await transaction.get(ilacRef);
+        if (!snapshot.exists) {
+          return IlacDurumGuncellemeSonucu.hata;
+        }
+
+        final Map<String, dynamic> veri =
+            snapshot.data() as Map<String, dynamic>? ?? {};
+        final String mevcutDurum = veri['sonDurum'] as String? ?? 'bekleniyor';
+        if (mevcutDurum == 'icildi' || mevcutDurum == 'atlandi') {
+          return IlacDurumGuncellemeSonucu.zatenIslenmis;
+        }
+
+        final Map<String, dynamic> guncelVeri = {
+          'sonDurum': yeniDurum,
+          'sonDurumZamani': FieldValue.serverTimestamp(),
+        };
+
+        // Stok düşmesi varsa atomik olarak azalt
+        bool stokYetersiz = false;
+        if (yeniDurum == 'icildi' && stokDusmesi > 0) {
+          final int mevcutStok = (veri['stokMiktari'] as num?)?.toInt() ?? 0;
+          final int yeniStok = max(0, mevcutStok - stokDusmesi);
+          stokYetersiz = mevcutStok < stokDusmesi;
+          guncelVeri['stokMiktari'] = yeniStok;
+        }
+
+        transaction.update(ilacRef, guncelVeri);
+        return stokYetersiz
+            ? IlacDurumGuncellemeSonucu.stokYetersiz
+            : IlacDurumGuncellemeSonucu.basarili;
+      });
 
       debugPrint(
         'İlaç durum güncellendi: $ilacId → $yeniDurum '

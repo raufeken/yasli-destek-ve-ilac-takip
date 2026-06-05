@@ -1,61 +1,72 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image_picker/image_picker.dart';
 
-// yalnızca kameradan görüntü alıp metin çıkarmakla görevlidir.
-// UI mantığı bu servise sızmaz; servis yalnızca String? döndürür.
+enum OcrOkumaDurumu {
+  basarili,
+  fotografSecilmedi,
+  metinOkunamadi,
+  kameraAcilamadi,
+}
 
-/// Kameradan görüntü alıp Google ML Kit ile metin tanıma yapan servis
-///
-/// Kullanım: İlaç ekleme ekranında "Akıllı Tarama (OCR)" butonuna basıldığında
-/// bu servis çağrılır. Tanınan metin ilaç adı alanına otomatik yazılır.
+class OcrOkumaSonucu {
+  final OcrOkumaDurumu durum;
+  final String? metin;
+
+  const OcrOkumaSonucu._(this.durum, [this.metin]);
+
+  const OcrOkumaSonucu.basarili(String metin)
+    : this._(OcrOkumaDurumu.basarili, metin);
+
+  const OcrOkumaSonucu.fotografSecilmedi()
+    : this._(OcrOkumaDurumu.fotografSecilmedi);
+
+  const OcrOkumaSonucu.metinOkunamadi() : this._(OcrOkumaDurumu.metinOkunamadi);
+
+  const OcrOkumaSonucu.kameraAcilamadi()
+    : this._(OcrOkumaDurumu.kameraAcilamadi);
+}
+
+/// Kameradan goruntu alip Google ML Kit ile metin tanima yapan servis.
 class OcrService {
   final ImagePicker _picker = ImagePicker();
 
-  /// Kameradan fotoğraf çeker ve Google ML Kit ile metin okur
-  ///
-  /// Başarılıysa okunan metin [String] döner, hata veya iptal durumunda null döner.
-  ///
-  // serbest bırakılır. Bu, bellek sızıntısını (memory leak) önler — best practice.
-  Future<String?> resimdenMetinOku() async {
+  Future<OcrOkumaSonucu> resimdenMetinOku() async {
+    TextRecognizer? recognizer;
+
     try {
-      // 1. Kameradan fotoğraf çek
       final XFile? foto = await _picker.pickImage(
         source: ImageSource.camera,
         preferredCameraDevice: CameraDevice.rear,
         imageQuality: 85,
       );
 
-      // Kullanıcı iptal ettiyse null dön
       if (foto == null) {
-        debugPrint('OCR: Kullanıcı fotoğraf çekmeyi iptal etti.');
-        return null;
+        debugPrint('OCR: Kullanici fotograf cekmeyi iptal etti.');
+        return const OcrOkumaSonucu.fotografSecilmedi();
       }
 
-      // 2. ML Kit TextRecognizer oluştur
-      final TextRecognizer recognizer = TextRecognizer(
-        script: TextRecognitionScript.latin,
-      );
-
-      // 3. Görüntüyü işle
+      recognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final InputImage inputImage = InputImage.fromFilePath(foto.path);
       final RecognizedText sonuc = await recognizer.processImage(inputImage);
-
-      // 4. Kaynakları serbest bırak
-      await recognizer.close();
-
       final String okunanMetin = sonuc.text.trim();
 
       if (okunanMetin.isEmpty) {
-        debugPrint('OCR: Görüntüde metin bulunamadı.');
-        return null;
+        debugPrint('OCR: Goruntude metin bulunamadi.');
+        return const OcrOkumaSonucu.metinOkunamadi();
       }
 
-      debugPrint('OCR: Metin okundu → $okunanMetin');
-      return okunanMetin;
+      debugPrint('OCR: Metin okundu -> $okunanMetin');
+      return OcrOkumaSonucu.basarili(okunanMetin);
+    } on PlatformException catch (e) {
+      debugPrint('OCR kamera/izin hatasi: ${e.code} - ${e.message}');
+      return const OcrOkumaSonucu.kameraAcilamadi();
     } catch (e) {
-      debugPrint('OCR hatası: $e');
-      return null;
+      debugPrint('OCR hatasi: $e');
+      return const OcrOkumaSonucu.kameraAcilamadi();
+    } finally {
+      await recognizer?.close();
     }
   }
 }

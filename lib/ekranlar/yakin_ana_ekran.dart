@@ -62,7 +62,7 @@ class _YakinAnaEkranState extends State<YakinAnaEkran> {
 
 
   // Hem büyüğün 'takipciIdleri' hem gözlemcinin 'takipEdilenler' listesi
-  // aynı Transaction'da güncellenir — atomik işlem garantisi.
+  // aynı Transaction'da güncellenir.
   void _eslesmeDialoguGoster() {
     TextEditingController kodController = TextEditingController();
 
@@ -568,7 +568,7 @@ class _YakinAnaEkranState extends State<YakinAnaEkran> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              elevation: 2,
+              elevation: 0,
             ),
           ),
         ],
@@ -576,313 +576,278 @@ class _YakinAnaEkranState extends State<YakinAnaEkran> {
     );
   }
 
-  
-  // günlük ilaç uyumunu tek bakışta gösterir.
-  //
-  // UNHAPPY PATH:
-  // - sonDurum == 'atlandi' veya 'zaman_asimi' → KIRMIZI alarm rozeti
-  // - stokMiktari <= 5 → "⚠️ Stok Kritik" uyarı rozeti
+  //ilaç kartı tasarımı ve durum göstergeleri 
   Widget _ilacKarti(MedicineModel ilac) {
     final bool uyariVar = ilac.stokUyariAktifMi();
-    final bool yakinEkledi = ilac.ekleyenRol == 'Yakin';
-    final bool stokKritik = ilac.stokMiktari <= 5;
-    final bool alarmDurum = ilac.sonDurum == IlacDurum.atlandi ||
-        ilac.sonDurum == IlacDurum.zamanAsimi;
 
-    // sonDurum badge renk ve metin
-    final Color badgeRenk;
-    final String badgeText;
-    final IconData badgeIkon;
+    // Durum rengi: sol çizgi ve ikon için
+    final Color durumRengi = ilac.sonDurum == IlacDurum.icildi
+        ? const Color(0xFF2E7D32)
+        : ilac.sonDurum == IlacDurum.atlandi
+        ? Colors.redAccent[700]! // Atlandı → Kırmızı alarm
+        : const Color(0xFF2E7D32); // Gözlemci için yeşil tema
+
+    // Durum rozeti bilgileri
+    final String durumMetni;
+    final IconData durumIkonu;
+    final Color durumBadgeRengi;
 
     switch (ilac.sonDurum) {
       case IlacDurum.icildi:
-        badgeRenk = Colors.green[700]!;
-        badgeText = 'Bugün İçildi';
-        badgeIkon = Icons.check_circle_outline;
+        durumMetni = 'Bugün İçildi';
+        durumIkonu = Icons.check_circle;
+        durumBadgeRengi = const Color(0xFF2E7D32);
         break;
-      case IlacDurum.atlandi:
-        badgeRenk = Colors.red[700]!;
-        badgeText = 'Atlandı';
-        badgeIkon = Icons.cancel_outlined;
+      case IlacDurum.atlandi:        
+        durumMetni = 'Atlandı';
+        durumIkonu = Icons.error_outline;
+        durumBadgeRengi = Colors.redAccent[700]!;
         break;
-      case IlacDurum.zamanAsimi:
-        badgeRenk = Colors.red[700]!;
-        badgeText = 'Zaman Aşımı';
-        badgeIkon = Icons.timer_off_outlined;
+      case IlacDurum.zamanAsimi:        
+        durumMetni = 'Zaman Aşımı';
+        durumIkonu = Icons.timer_off_outlined;
+        durumBadgeRengi = Colors.redAccent[700]!;
         break;
       default:
-        badgeRenk = Colors.grey[600]!;
-        badgeText = 'Bekliyor';
-        badgeIkon = Icons.schedule_outlined;
+        durumMetni = 'Bekliyor';
+        durumIkonu = Icons.schedule;
+        durumBadgeRengi = Colors.grey[500]!;
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: uyariVar
-            ? Border(
-                left: BorderSide(color: Colors.red[500]!, width: 4),
-                top: BorderSide(color: Colors.grey[200]!),
-                right: BorderSide(color: Colors.grey[200]!),
-                bottom: BorderSide(color: Colors.grey[200]!),
-              )
-            : Border.all(color: Colors.grey[200]!),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.green.withOpacity(0.08),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor:
-                      uyariVar ? Colors.red[50] : Colors.green[50],
-                  child: Icon(
-                    Icons.medication,
-                    color: uyariVar ? Colors.red[600] : Colors.green[700],
-                    size: 22,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          // Sol taraftaki durum çizgisi
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: durumRengi, width: 5)),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: durumRengi.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.medication, color: durumRengi, size: 20),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              ilac.ilacAdi,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ilac.ilacAdi,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                            letterSpacing: -0.3,
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: yakinEkledi
-                                  ? Colors.green[50]
-                                  : Colors.blue[50],
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              yakinEkledi
-                                  ? 'Gözlemci Ekledi'
-                                  : 'Büyüğümüz Ekledi',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: yakinEkledi
-                                    ? Colors.green[700]
-                                    : Colors.blue[700],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${ilac.dozaj}  •  ${ilac.form.etiket}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[600],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+                        Text(
+                          '${ilac.dozaj} • ${ilac.form.etiket}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.delete_outline,
-                    color: Colors.red[400],
-                    size: 20,
-                  ),
-                  tooltip: 'İlacı Kaldır',
-                  onPressed: () => _ilacSilOnayla(ilac),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // Durum rozeti + öğün chip'leri
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                // Durum rozeti
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: badgeRenk.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: badgeRenk.withOpacity(0.3)),
-                  ),
-                  child: Row(
+                  // Düzenle ve Sil butonları yan yana
+                  Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(badgeIkon, size: 13, color: badgeRenk),
-                      const SizedBox(width: 4),
-                      Text(
-                        badgeText,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: badgeRenk,
+                      IconButton(
+                        icon: Icon(
+                          Icons.edit_outlined,
+                          color: Colors.grey[500],
+                          size: 20,
                         ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Düzenle',
+                        onPressed: () {
+                          // Düzenleme ekranına yönlendir — DRY prensibi
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => IlacEklemeEkrani(
+                                yasliId: ilac.yasliId,
+                                ekleyenRol: ilac.ekleyenRol,
+                                duzenlenecekIlac: ilac,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                      IconButton(
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: Colors.grey[400],
+                          size: 20,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Kaldır',
+                        onPressed: () => _ilacSilOnayla(ilac),
                       ),
                     ],
                   ),
-                ),
+                ],
+              ),
+              const SizedBox(height: 12),
 
-               
-                if (alarmDurum)
+              // ORTA BÖLÜM: Etiketler (Durum + Aç/Tok + Saatler)
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  // Durum rozeti
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.red[200]!),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.notification_important_outlined,
-                          size: 13,
-                          color: Colors.red[700],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'DİKKAT',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red[700],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-        
-                if (stokKritik)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.amber[50],
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.amber[200]!),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.warning_amber,
-                          size: 13,
-                          color: Colors.amber[800],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Stok Kritik',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.amber[800],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Öğün chip'leri
-                ...ilac.kullanimOgunleri.map(
-                  (o) => Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E9),
-                      borderRadius: BorderRadius.circular(10),
+                      color: durumBadgeRengi.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
                     ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(durumIkonu, size: 13, color: durumBadgeRengi),
+                        const SizedBox(width: 4),
+                        Text(
+                          durumMetni,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: durumBadgeRengi,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Aç/Tok rozeti
+                  if (ilac.acTokDurumu == 'Aç' || ilac.acTokDurumu == 'Tok')
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        ilac.acTokDurumu == 'Aç' ? 'Aç Karnına' : 'Tok Karnına',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
+
+                  // Saatler rozeti (yeni sistem varsa saatler, yoksa öğünler)
+                  ...(ilac.kullanimSaatleri.isNotEmpty
+                          ? ilac.kullanimSaatleri
+                          : ilac.kullanimOgunleri)
+                      .map(
+                        (saat) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            saat,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ),
+                      ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // ALT BÖLÜM: Tarih, Stok bilgisi ve uyarı detayı
+              Row(
+                children: [
+                  Icon(
+                    uyariVar ? Icons.warning_amber : Icons.event_outlined,
+                    size: 13,
+                    color: uyariVar ? Colors.red[600] : Colors.grey[500],
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
                     child: Text(
-                      o,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF2E7D32),
-                        fontWeight: FontWeight.w600,
+                      _tarihBicimle(ilac.bitisTarihi),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: uyariVar ? Colors.red[600] : Colors.grey[500],
+                        fontWeight:
+                            uyariVar ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Tarih ve stok bilgisi
-            Row(
-              children: [
-                Icon(
-                  uyariVar ? Icons.warning_amber : Icons.event_outlined,
-                  size: 14,
-                  color: uyariVar ? Colors.red[600] : Colors.grey[500],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  _tarihBicimle(ilac.bitisTarihi),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: uyariVar ? Colors.red[600] : Colors.grey[500],
-                    fontWeight:
-                        uyariVar ? FontWeight.bold : FontWeight.normal,
+                  // Stok azalıyorsa kullanıcıya nedenini açıkla
+                  if (uyariVar)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Text(
+                        '(Stok Azalıyor)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[500],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 10),
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    size: 13,
+                    color: Colors.grey[500],
                   ),
-                ),
-                const SizedBox(width: 10),
-                Icon(
-                  Icons.inventory_2_outlined,
-                  size: 14,
-                  color: stokKritik ? Colors.amber[800] : Colors.grey[500],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Stok: ${ilac.stokMiktari}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: stokKritik ? Colors.amber[800] : Colors.grey[500],
-                    fontWeight:
-                        stokKritik ? FontWeight.bold : FontWeight.normal,
+                  const SizedBox(width: 4),
+                  Text(
+                    'Stok: ${ilac.stokMiktari}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

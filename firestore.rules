@@ -1,0 +1,131 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function myUserDoc() {
+      return get(/databases/$(database)/documents/Kullanicilar/$(request.auth.uid));
+    }
+
+    function myFollowedElders() {
+      return myUserDoc().data.takipEdilenler == null
+        ? []
+        : myUserDoc().data.takipEdilenler;
+    }
+
+    function isOwnMedicine(data) {
+      return signedIn() && data.yasliId == request.auth.uid;
+    }
+
+    function isFollowedMedicine(data) {
+      return signedIn() && data.yasliId in myFollowedElders();
+    }
+
+    function isAllowedMedicineStatus(status) {
+      return status in ['bekleniyor', 'icildi', 'atlandi', 'zaman_asimi'];
+    }
+
+    function onlyAllowedUserUpdate() {
+      return request.resource.data.diff(resource.data).changedKeys()
+        .hasOnly([
+          'isim',
+          'adSoyad',
+          'yas',
+          'telefonNumarasi',
+          'fcmToken'
+        ]);
+    }
+
+    function validMedicineCreate() {
+      return request.resource.data.yasliId is string
+        && request.resource.data.ilacAdi is string
+        && request.resource.data.aktif == true
+        && isAllowedMedicineStatus(
+          request.resource.data.sonDurum == null
+            ? 'bekleniyor'
+            : request.resource.data.sonDurum
+        );
+    }
+
+    function criticalMedicineFieldsUnchanged() {
+      return request.resource.data.yasliId == resource.data.yasliId
+        && request.resource.data.stokMiktari == resource.data.stokMiktari
+        && request.resource.data.sonDurum == resource.data.sonDurum
+        && request.resource.data.sonDurumZamani == resource.data.sonDurumZamani;
+    }
+
+    match /Kullanicilar/{uid} {
+      allow get: if isSelf(uid)
+        || (signedIn() && resource.data.rol == 'Yasli');
+
+      allow list: if signedIn();
+
+      allow create: if isSelf(uid)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.rol in ['Yasli', 'Yakin'];
+
+      allow update: if isSelf(uid) && onlyAllowedUserUpdate();
+
+      allow delete: if false;
+    }
+
+    match /Ilaclar/{ilacId} {
+      allow read: if isOwnMedicine(resource.data)
+        || isFollowedMedicine(resource.data);
+
+      allow create: if signedIn()
+        && validMedicineCreate()
+        && (
+          request.resource.data.yasliId == request.auth.uid
+          || request.resource.data.yasliId in myFollowedElders()
+        );
+
+      allow update: if signedIn()
+        && (
+          isOwnMedicine(resource.data)
+          || (
+            isFollowedMedicine(resource.data)
+            && criticalMedicineFieldsUnchanged()
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    match /IlacKayitlari/{kayitId} {
+      allow read: if signedIn()
+        && (
+          resource.data.yasliId == request.auth.uid
+          || resource.data.kullaniciUid == request.auth.uid
+          || resource.data.yasliId in myFollowedElders()
+          || resource.data.kullaniciUid in myFollowedElders()
+        );
+
+      allow create: if signedIn()
+        && (
+          request.resource.data.yasliId == request.auth.uid
+          || request.resource.data.kullaniciUid == request.auth.uid
+        );
+
+      allow update: if signedIn()
+        && (
+          resource.data.yasliId == request.auth.uid
+          || resource.data.kullaniciUid == request.auth.uid
+        )
+        && isAllowedMedicineStatus(request.resource.data.durum);
+
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

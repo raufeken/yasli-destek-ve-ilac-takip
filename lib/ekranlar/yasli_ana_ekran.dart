@@ -3,14 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/local_notification_service.dart';
 import '../models/medicine_model.dart';
 import 'ilac_ekleme_ekrani.dart';
 import 'splash_ekrani.dart';
 
 
-// initState'te tek seferlik çekilir. Gerçek zamanlı ilaç listesi ise StreamBuilder
-// ile ayrı tutulur; böylece her Firestore değişikliği yalnızca ilgili widget'ı yeniden
-// çizer, tüm sayfa rebuild olmaz.
 /// Büyüklerimiz için ana ekran
 class YasliAnaEkran extends StatefulWidget {
   const YasliAnaEkran({Key? key}) : super(key: key);
@@ -26,6 +24,7 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
   String _kullaniciIsmi = '';
   String _eslesmeKodu = '';
   bool _yukleniyor = true;
+  final Set<String> _islemdekiIlacIdleri = {};
 
   @override
   void initState() {
@@ -36,8 +35,8 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
   Future<void> _kullaniciBilgileriniYukle() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      Map<String, dynamic>? bilgiler =
-          await _firestoreService.kullaniciBilgileriniGetir(user.uid);
+      Map<String, dynamic>? bilgiler = await _firestoreService
+          .kullaniciBilgileriniGetir(user.uid);
       if (bilgiler != null && mounted) {
         setState(() {
           _kullaniciIsmi = bilgiler['isim'] ?? 'Kullanıcı';
@@ -61,9 +60,8 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
     }
   }
 
-  
   // Hem büyüğün 'takipciIdleri' hem yakının 'takipEdilenler' listesi
-  // aynı Transaction'da güncellenir — atomik işlem, veri tutarsızlığı sıfır.
+  // aynı Transaction'da güncellenir 
   Future<void> _takipciKaldir(String relativeUid, String relativeIsim) async {
     final bool? onaylandi = await showDialog<bool>(
       context: context,
@@ -87,7 +85,10 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700]),
             child: const Text(
               'Kaldır',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -117,7 +118,6 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
     );
   }
 
-  
   // Bu sayede ana ekran yalnızca ilaç listesini gösterir — bilişsel yük azalır.
   Widget _takipciSeksiyonu(String yasliUid) {
     return StreamBuilder<DocumentSnapshot>(
@@ -225,100 +225,175 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
     }
   }
 
- 
-  // sonDurum alanı güncellenir — "soft state update" mimarisi.
-  //
-  // KRİTİK STOK MANTIĞI:
-  // - İçtim → sonDurum='icildi', stokMiktari -= kullanimDozu (Firestore atomik)
-  // - Atla  → sonDurum='atlandi', stoktan DÜŞÜLMEZ
   Future<void> _ilacDurumGuncelle(MedicineModel ilac) async {
-    final bool? icerildi = await showDialog<bool>(
+    if (_islemdekiIlacIdleri.contains(ilac.id)) return;
+
+    final bool? icerildi = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          ilac.ilacAdi,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Bu ilacı içtiğinizi onaylıyor musunuz?',
-          style: TextStyle(fontSize: 16),
-        ),
-        actionsAlignment: MainAxisAlignment.spaceEvenly,
-        actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.orange[700],
-              side: BorderSide(color: Colors.orange[700]!),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 10,
+      isScrollControlled: true, // Menünün içeriğe göre esnemesini sağlar
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [              
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            child: const Text(
-              'Hayır, Atla',
-              style: TextStyle(fontSize: 15),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[700],
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 10,
+              const SizedBox(height: 32),
+
+              Text(
+                ilac.ilacAdi,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                  letterSpacing: -0.8,
+                ),
+                textAlign: TextAlign.center,
               ),
-            ),
-            child: const Text(
-              'Evet, İçtim',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-            ),
+              const SizedBox(height: 8),
+              Text(
+                'Bu ilacı içtiğinizi onaylıyor musunuz?',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w400,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 40),
+
+              
+              SizedBox(
+                width: double.infinity,
+                height:
+                    60, 
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(
+                      0xFF2E7D32,
+                    ), // Tok, tıbbi orman yeşili
+                    foregroundColor: Colors.white,
+                    elevation: 0, 
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Evet, İçtim',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              
+              SizedBox(
+                width: double.infinity,
+                height: 60,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.grey[100], // Göz yormayan açık gri
+                    foregroundColor: Colors.black87,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Hayır, Atla',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+         
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, null),
+                style: TextButton.styleFrom(foregroundColor: Colors.grey[500]),
+                child: const Text('Vazgeç', style: TextStyle(fontSize: 16)),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
 
     if (icerildi == null || !mounted) return;
 
+    setState(() => _islemdekiIlacIdleri.add(ilac.id));
+
     try {
+      final IlacDurumGuncellemeSonucu sonuc;
       if (icerildi) {
-        // İÇTİ: sonDurum='icildi' + stokMiktari -= kullanimDozu
-        await _firestoreService.ilacDurumGuncelle(
+        // İÇTİ: sonDurum='icildi' + kMiktari -= kullanimDozu
+        sonuc = await _firestoreService.ilacDurumGuncelle(
           ilac.id,
           IlacDurum.icildi,
           stokDusmesi: ilac.kullanimDozu,
         );
       } else {
         // ATLADI: sonDurum='atlandi', stoktan düşme YOK
-        await _firestoreService.ilacDurumGuncelle(
+        sonuc = await _firestoreService.ilacDurumGuncelle(
           ilac.id,
           IlacDurum.atlandi,
         );
       }
 
       if (!mounted) return;
+      if (sonuc != IlacDurumGuncellemeSonucu.basarili) {
+        final String mesaj = switch (sonuc) {
+          IlacDurumGuncellemeSonucu.stokYetersiz =>
+            'Stok yetersiz. Stok 0 olarak güncellendi.',
+          IlacDurumGuncellemeSonucu.zatenIslenmis =>
+            'Bu ilaç için zaten işlem yapılmış.',
+          IlacDurumGuncellemeSonucu.hata =>
+            'İşlem sırasında hata oluştu. Tekrar deneyin.',
+          IlacDurumGuncellemeSonucu.basarili => '',
+        };
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(mesaj),
+            backgroundColor: sonuc == IlacDurumGuncellemeSonucu.hata
+                ? Colors.red
+                : Colors.orange[700],
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            icerildi
-                ? '✅ ${ilac.ilacAdi} içildi olarak kaydedildi'
-                : '⚠️ ${ilac.ilacAdi} bu öğün atlandı',
+            icerildi ? 'İlaç içildi olarak kaydedildi.' : 'İlaç atlandı.',
           ),
-          backgroundColor:
-              icerildi ? Colors.green[700] : Colors.orange[700],
+          backgroundColor: icerildi
+              ? const Color(0xFF2E7D32)
+              : Colors.grey[800],
           duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Hata: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _islemdekiIlacIdleri.remove(ilac.id));
+      }
     }
   }
 
@@ -345,7 +420,10 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700]),
             child: const Text(
               'Kaldır',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -353,7 +431,10 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
     );
 
     if (onaylandi != true || !mounted) return;
-    await _firestoreService.ilacModelSil(ilac.id);
+    final bool basarili = await _firestoreService.ilacModelSil(ilac.id);
+    if (basarili) {
+      await LocalNotificationService().cancelMedicineReminders(ilac);
+    }
   }
 
   @override
@@ -383,29 +464,33 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
-          children: [
+          children: [            
             DrawerHeader(
               decoration: const BoxDecoration(color: Color(0xFF1565C0)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   const CircleAvatar(
-                    radius: 30,
+                    radius: 26,
                     backgroundColor: Colors.white24,
-                    child: Icon(Icons.person, size: 36, color: Colors.white),
+                    child: Icon(Icons.person, size: 30, color: Colors.white),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _kullaniciIsmi,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: Text(
+                      _kullaniciIsmi,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const Text(
                     'Büyüklerimiz',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                    style: TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                 ],
               ),
@@ -478,159 +563,174 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
         ),
       ),
 
+      // RESPONSIVE BODY: Header artık sabit değil, liste ile birlikte kayar
       body: _yukleniyor
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Selamlama kartı
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 32,
-                          backgroundColor: const Color(0xFF1565C0),
-                          child: const Icon(
-                            Icons.person,
-                            size: 36,
-                            color: Colors.white,
+          : Column(
+              children: [
+                // Kaydırılabilir alan (Header + İlaç listesi)
+                Expanded(
+                  child: StreamBuilder<List<MedicineModel>>(
+                    stream: _firestoreService.ilaclariniDinle(yasliUid ?? ''),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Hata: ${snapshot.error}',
+                            style: const TextStyle(color: Colors.red),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Merhaba,',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey[600],
+                        );
+                      }
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final List<MedicineModel> ilaclar = snapshot.data ?? [];
+
+                      // Tek bir kaydırılabilir alan: Header + Liste
+                      return ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                        itemCount: ilaclar.length + 2, // +2: header + başlık
+                        itemBuilder: (context, index) {
+                          // İlk eleman: Selamlama kartı
+                          if (index == 0) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 28,
+                                      backgroundColor: const Color(0xFF1565C0),
+                                      child: const Icon(
+                                        Icons.person,
+                                        size: 32,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Merhaba,',
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                          Text(
+                                            _kullaniciIsmi,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              Text(
-                                _kullaniciIsmi,
-                                style: const TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                            );
+                          }
 
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 8),
-                    child: Text(
-                      'İlaçlarım',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ),
-
-                  // StreamBuilder gerçek zamanlı dinleme sağlar; setState gerekmez.
-                  Expanded(
-                    child: StreamBuilder<List<MedicineModel>>(
-                      stream: _firestoreService.ilaclariniDinle(
-                        yasliUid ?? '',
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.hasError) {
-                          return Center(
-                            child: Text(
-                              'Hata: ${snapshot.error}',
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          );
-                        }
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        }
-
-                        final List<MedicineModel> ilaclar =
-                            snapshot.data ?? [];
-
-                        if (ilaclar.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.medication_outlined,
-                                  size: 64,
-                                  color: Colors.grey[300],
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Henüz ilaç eklenmedi',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.grey[500],
+                          // İkinci eleman: "İlaçlarım" başlığı veya boş durum
+                          if (index == 1) {
+                            if (ilaclar.isEmpty) {
+                              return SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.4,
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.medication_outlined,
+                                        size: 64,
+                                        color: Colors.grey[300],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'Henüz ilaç eklenmedi',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          color: Colors.grey[500],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          );
-                        }
+                              );
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(
+                                left: 4,
+                                bottom: 8,
+                              ),
+                              child: Text(
+                                'İlaçlarım',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                            );
+                          }
 
-                        return ListView.builder(
-                          itemCount: ilaclar.length,
-                          itemBuilder: (context, index) =>
-                              _ilacKarti(ilaclar[index]),
-                        );
-                      },
-                    ),
+                          // Geri kalanlar: İlaç kartları
+                          return _ilacKarti(ilaclar[index - 2]);
+                        },
+                      );
+                    },
                   ),
-                  const SizedBox(height: 12),
+                ),
 
-                  ElevatedButton.icon(
-                    onPressed: _ilacEkleMenusuGoster,
-                    icon: const Icon(Icons.add, size: 28),
-                    label: const Text(
-                      'İlaç Ekle',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                // Alt sabit buton — her zaman erişilebilir
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: SafeArea(
+                    top: false,
+                    child: ElevatedButton.icon(
+                      onPressed: _ilacEkleMenusuGoster,
+                      icon: const Icon(Icons.add, size: 26),
+                      label: const Text(
+                        'İlaç Ekle',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1565C0),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
                       ),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1565C0),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 3,
-                    ),
                   ),
-                  const SizedBox(height: 16),
-                ],
-              ),
+                ),
+              ],
             ),
     );
   }
@@ -641,216 +741,369 @@ class _YasliAnaEkranState extends State<YasliAnaEkran> {
   // 2. sonDurum == 'icildi' veya 'atlandi' → büyük buton KAYBOLUR,
   //    yerine tıklanamaz şık rozet (badge) gelir
   // 3. sonDurum == 'bekleniyor' → aksiyon butonu aktif
+  //
+  // ZAMAN KİLİDİ: kullanimSaatleri listesindeki hedef saate ±1 saat tolerans
+  // --- YENİ TİPOGRAFİK VE MİNİMALİST İLAÇ KARTI ---
   Widget _ilacKarti(MedicineModel ilac) {
     final bool uyariVar = ilac.stokUyariAktifMi();
-    final bool henuzBaslamadi = ilac.baslangicTarihi.isAfter(DateTime.now());
-    final bool aksiyonAlindi = ilac.sonDurum == IlacDurum.icildi ||
-        ilac.sonDurum == IlacDurum.atlandi;
+    final bool aksiyonAlindi =
+        ilac.sonDurum == IlacDurum.icildi || ilac.sonDurum == IlacDurum.atlandi;
+    final bool islemDevamEdiyor = _islemdekiIlacIdleri.contains(ilac.id);
 
-    final Color kartRengi = ilac.sonDurum == IlacDurum.icildi
-        ? const Color(0xFFE8F5E9)
+    // --- ZAMAN KİLİDİ VE TOLERANS MANTIĞI
+    final DateTime simdi = DateTime.now();
+    final DateTime simdiDakika = DateTime(
+      simdi.year,
+      simdi.month,
+      simdi.day,
+      simdi.hour,
+      simdi.minute,
+    );
+    final DateTime bugun = DateTime(simdi.year, simdi.month, simdi.day);
+    final DateTime baslangicGunu = DateTime(
+      ilac.baslangicTarihi.year,
+      ilac.baslangicTarihi.month,
+      ilac.baslangicTarihi.day,
+    );
+    final DateTime bitisGunu = DateTime(
+      ilac.bitisTarihi.year,
+      ilac.bitisTarihi.month,
+      ilac.bitisTarihi.day,
+    );
+    String butonMetni = 'İlacı İçtim';
+    bool butonKilitli = false;
+
+    if (bugun.isBefore(baslangicGunu)) {
+      butonKilitli = true;
+      butonMetni = 'Zaman\u0131 Gelmedi';
+    } else if (bugun.isAfter(bitisGunu)) {
+      butonKilitli = true;
+      butonMetni = 'Zaman\u0131 Ge\u00e7ti';
+    } else if (ilac.kullanimSaatleri.isNotEmpty) {
+      butonKilitli = true;
+      butonMetni = 'Zamanı Gelmedi';
+
+      bool toleransIcinde = false;
+      bool hepsiGecmis = true;
+
+      for (final String saatStr in ilac.kullanimSaatleri) {
+        final List<String> parcalar = saatStr.split(':');
+        if (parcalar.length != 2) continue;
+
+        final int hedefSaat = int.tryParse(parcalar[0]) ?? 0;
+        final int hedefDakika = int.tryParse(parcalar[1]) ?? 0;
+
+        final DateTime hedefZaman = DateTime(
+          simdi.year,
+          simdi.month,
+          simdi.day,
+          hedefSaat,
+          hedefDakika,
+        );
+        final DateTime gecSinir = hedefZaman.add(const Duration(hours: 2));
+
+        if (!simdiDakika.isBefore(hedefZaman) &&
+            simdiDakika.isBefore(gecSinir)) {
+          toleransIcinde = true;
+          break;
+        }
+        if (simdiDakika.isBefore(gecSinir)) {
+          hepsiGecmis = false;
+        }
+      }
+
+      if (toleransIcinde) {
+        butonKilitli = false;
+        butonMetni = 'İlacı İçtim';
+      } else if (hepsiGecmis && ilac.sonDurum == IlacDurum.bekleniyor) {
+        butonKilitli = true;
+        butonMetni = 'Zamanı Geçti';
+      } else {
+        butonKilitli = true;
+        butonMetni = 'Zamanı Gelmedi';
+      }
+    }
+    // Eski öğün bazlı kontrol (geriye dönük uyumluluk)
+    else if (ilac.kullanimOgunleri.isNotEmpty) {
+      final int suankiSaat = simdi.hour;
+      bool saatUygunMu = false;
+
+      if (ilac.kullanimOgunleri.contains('Sabah') &&
+          (suankiSaat >= 6 && suankiSaat < 12))
+        saatUygunMu = true;
+      if (ilac.kullanimOgunleri.contains('Öğle') &&
+          (suankiSaat >= 12 && suankiSaat < 17))
+        saatUygunMu = true;
+      if (ilac.kullanimOgunleri.contains('Akşam') &&
+          (suankiSaat >= 17 && suankiSaat < 22))
+        saatUygunMu = true;
+      if (ilac.kullanimOgunleri.contains('Gece') &&
+          (suankiSaat >= 22 || suankiSaat < 6))
+        saatUygunMu = true;
+
+      butonKilitli = !saatUygunMu;
+      butonMetni = saatUygunMu ? 'İlacı İçtim' : 'Zamanı Değil';
+    }
+    
+    final Color durumRengi = ilac.sonDurum == IlacDurum.icildi
+        ? const Color(0xFF2E7D32) // Yeşil
         : ilac.sonDurum == IlacDurum.atlandi
-            ? const Color(0xFFFFF9C4)
-            : Colors.white;
+        ? Colors.orange[700]! // Turuncu
+        : const Color(0xFF1565C0); // Mavi (Bekliyor)
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: kartRengi,
-        borderRadius: BorderRadius.circular(16),
-        border: uyariVar
-            ? Border(
-                left: BorderSide(color: Colors.red[500]!, width: 4),
-                top: BorderSide(color: Colors.grey[200]!),
-                right: BorderSide(color: Colors.grey[200]!),
-                bottom: BorderSide(color: Colors.grey[200]!),
-              )
-            : Border.all(color: Colors.grey[200]!),
+        color: Colors.white, // KART HER ZAMAN BEMBEYAZ
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withOpacity(0.08),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor:
-                      uyariVar ? Colors.red[50] : Colors.blue[50],
-                  child: Icon(
-                    Icons.medication,
-                    color: uyariVar
-                        ? Colors.red[600]
-                        : const Color(0xFF1565C0),
-                    size: 24,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          // SOL TARAFTAKİ ŞIK DURUM ÇİZGİSİ
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: durumRengi, width: 6)),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ÜST BÖLÜM: İkon, İsim ve Aksiyon Butonları
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: durumRengi.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.medication, color: durumRengi, size: 24),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ilac.ilacAdi,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${ilac.dozaj} • ${ilac.form.etiket}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),           
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        ilac.ilacAdi,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                      IconButton(
+                        icon: Icon(
+                          Icons.edit_outlined,
+                          color: Colors.grey[500],
+                          size: 22,
                         ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () {                          
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => IlacEklemeEkrani(
+                                yasliId: ilac.yasliId,
+                                ekleyenRol: ilac.ekleyenRol,
+                                duzenlenecekIlac: ilac,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      Text(
-                        '${ilac.dozaj}  •  ${ilac.form.etiket}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[600],
+                      const SizedBox(width: 12),
+                      IconButton(
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: Colors.grey[400],
+                          size: 22,
                         ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => _ilacSil(ilac),
                       ),
                     ],
                   ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.delete_outline,
-                    color: Colors.red[400],
-                    size: 22,
-                  ),
-                  onPressed: () => _ilacSil(ilac),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
+                ],
+              ),
+              const SizedBox(height: 16),
 
-            Wrap(
-              spacing: 6,
-              children: ilac.kullanimOgunleri
-                  .map(
-                    (o) => Container(
+              // ORTA BÖLÜM: Etiketler (Aç/Tok ve Saatler)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  // Aç/Tok Rozeti
+                  if (ilac.acTokDurumu == 'Aç' || ilac.acTokDurumu == 'Tok')
+                    Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
-                        vertical: 3,
+                        vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE3F2FD),
-                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        o,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF1565C0),
+                        ilac.acTokDurumu == 'Aç' ? 'Aç Karnına' : 'Tok Karnına',
+                        style: TextStyle(
+                          fontSize: 13,
                           fontWeight: FontWeight.w600,
+                          color: Colors.grey[800],
                         ),
                       ),
                     ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 8),
-
-            // Tarih ve stok bilgisi
-            Row(
-              children: [
-                Icon(
-                  uyariVar ? Icons.warning_amber : Icons.event_outlined,
-                  size: 14,
-                  color: uyariVar ? Colors.red[600] : Colors.grey[500],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  _tarihBicimle(ilac.bitisTarihi),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: uyariVar ? Colors.red[600] : Colors.grey[500],
-                    fontWeight:
-                        uyariVar ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Icon(Icons.inventory_2_outlined,
-                    size: 14, color: Colors.grey[500]),
-                const SizedBox(width: 4),
-                Text(
-                  'Stok: ${ilac.stokMiktari}',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            
-            // yerine tıklanamaz rozet (badge) gelir.
-            if (aksiyonAlindi)
-              _durumRozeti(ilac.sonDurum)
-            else
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed:
-                      henuzBaslamadi ? null : () => _ilacDurumGuncelle(ilac),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1565C0),
-                    disabledBackgroundColor: Colors.grey[300],
-                    foregroundColor: Colors.white,
-                    disabledForegroundColor: Colors.grey[500],
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 2,
-                  ),
-                  child: Text(
-                    henuzBaslamadi ? 'Henüz Başlamadı' : 'İlacı İçtim',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+                  // Saatler Rozeti
+                  ...(ilac.kullanimSaatleri.isNotEmpty
+                          ? ilac.kullanimSaatleri
+                          : ilac.kullanimOgunleri)
+                      .map(
+                        (saat) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F7FF),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            saat,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1565C0),
+                            ),
+                          ),
+                        ),
+                      ),
+                ],
               ),
-          ],
+              const SizedBox(height: 20),
+
+              // ALT BÖLÜM: Tarih, Stok ve Aksiyon Butonu
+              Row(
+                children: [
+                  Icon(
+                    uyariVar ? Icons.warning_amber : Icons.event_outlined,
+                    size: 14,
+                    color: uyariVar ? Colors.red[600] : Colors.grey[500],
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _tarihBicimle(ilac.bitisTarihi),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: uyariVar ? Colors.red[600] : Colors.grey[500],
+                      fontWeight: uyariVar
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    size: 14,
+                    color: Colors.grey[500],
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Stok: ${ilac.stokMiktari}',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              if (aksiyonAlindi)
+                _durumRozeti(ilac.sonDurum)
+              else
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: (butonKilitli || islemDevamEdiyor)
+                        ? null
+                        : () => _ilacDurumGuncelle(ilac),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1565C0),
+                      disabledBackgroundColor: Colors.grey[200],
+                      foregroundColor: Colors.white,
+                      disabledForegroundColor: Colors.grey[400],
+                      elevation: 0, // Flat tasarım
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      islemDevamEdiyor ? 'Kaydediliyor...' : butonMetni,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // Yeşil: İçildi, Kırmızı: Atlandı. Tıklanamaz yapıda.
+  // --- YENİ ZARİF DURUM ROZETİ ("Bugün İçildi") ---
   Widget _durumRozeti(String sonDurum) {
     final bool icildi = sonDurum == IlacDurum.icildi;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: icildi ? Colors.green[50] : Colors.red[50],
+        color: icildi
+            ? const Color(0xFFF1F8F1)
+            : const Color(0xFFFFF4F2), 
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: icildi ? Colors.green[300]! : Colors.red[300]!,
-        ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            icildi ? Icons.check_circle_outline : Icons.cancel_outlined,
-            size: 18,
-            color: icildi ? Colors.green[700] : Colors.red[700],
+            icildi ? Icons.check_circle : Icons.error_outline,
+            size: 20,
+            color: icildi ? const Color(0xFF2E7D32) : Colors.orange[700],
           ),
           const SizedBox(width: 8),
           Text(
-            icildi ? 'Bugün İçildi' : '❌ Atlandı',
+            icildi ? 'İlaç Başarıyla İçildi' : 'Bu Öğün Atlandı',
             style: TextStyle(
               fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: icildi ? Colors.green[700] : Colors.red[700],
+              fontWeight: FontWeight.w600,
+              color: icildi ? const Color(0xFF2E7D32) : Colors.orange[700],
             ),
           ),
         ],

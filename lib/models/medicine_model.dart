@@ -10,7 +10,8 @@ enum IlacForm {
   damla('Damla'),
   kapsul('Kapsül'),
   jel('Jel'),
-  toz('Toz');
+  toz('Toz'),
+  igne('İğne');
 
   final String etiket;
   const IlacForm(this.etiket);
@@ -41,19 +42,10 @@ class IlacOgun {
 // Bu sayede UI katmanı ve Firestore arasında tutarsız String yazımı riski sıfıra iner.
 // 'atlandi' yeni standarttır; backward compatibility için fromMap'te 'atildi' de kabul edilir.
 /// İlacın günlük kullanım durumunu temsil eden durum sabitleri
-class IlacDurum {
-  /// Henüz içilmedi, yanıt bekleniyor
-  static const String bekleniyor = 'bekleniyor';
-
-  /// Büyüklerimiz ilacı içtiğini onayladı
-  static const String icildi = 'icildi';
-
-  // Geriye dönük uyumluluk: fromMap fonksiyonunda eski 'atildi' kayıtları
-  // otomatik olarak 'atlandi'ya normalize edilir.
-  /// Büyüklerimiz o öğünde atladığını bildirdi
-  static const String atlandi = 'atlandi';
-
-  /// Belirlenen süre içinde aksiyon alınmadı — zaman aşımına uğradı
+class IlacDurum { 
+  static const String bekleniyor = 'bekleniyor'; 
+  static const String icildi = 'icildi';  
+  static const String atlandi = 'atlandi';  
   static const String zamanAsimi = 'zaman_asimi';
 }
 
@@ -125,6 +117,12 @@ class MedicineModel {
   /// Kaydın Firestore'a yazıldığı zaman (ServerTimestamp)
   final DateTime? olusturmaTarihi;
 
+  /// Açlık/tokluk durumu: 'Aç', 'Tok' veya 'Farketmez'
+  final String acTokDurumu;
+
+  /// İlacın kullanım saatleri (örn: ['08:00', '20:00'])
+  final List<String> kullanimSaatleri;
+
   const MedicineModel({
     required this.id,
     required this.yasliId,
@@ -142,13 +140,15 @@ class MedicineModel {
     this.sonDurum = IlacDurum.bekleniyor,
     this.sonDurumZamani,
     this.olusturmaTarihi,
+    this.acTokDurumu = 'Farketmez',
+    this.kullanimSaatleri = const [],
   });
 
   // ---------- FACTORY METODLARI ----------
 
   /// Bitiş ve uyarı tarihlerini otomatik hesaplayarak yeni bir MedicineModel oluşturur
   ///
-  /// Kullanım: Yeni ilaç kaydı sırasında çağrılır (form submit)
+  /// Kullanım: Yeni ilaç kaydı sırasında çağrılır
   /// [stokMiktari] / [kullanimOgunleri.length] = günlük doz sayısı
   /// bitiş = başlangıç + ⌈stok / günlük öğün⌉ gün
   factory MedicineModel.hesaplaVeOlustur({
@@ -162,13 +162,16 @@ class MedicineModel {
     required int stokMiktari,
     int kullanimDozu = 1,
     required DateTime baslangicTarihi,
+    String acTokDurumu = 'Farketmez',
+    List<String> kullanimSaatleri = const [],
   }) {
-    // En az 1 öğün seçilmeli; 0'a bölmeyi engelle
-    final int ogunSayisi =
-        kullanimOgunleri.isNotEmpty ? kullanimOgunleri.length : 1;
+    // Stok hesabında kullanimSaatleri varsa onu kullan, yoksa öğün sayısını
+    final int dozSayisi = kullanimSaatleri.isNotEmpty
+        ? kullanimSaatleri.length
+        : (kullanimOgunleri.isNotEmpty ? kullanimOgunleri.length : 1);
 
     // Kaç gün süreceğini hesapla (yukarı yuvarla)
-    final int toplamGun = (stokMiktari / ogunSayisi).ceil();
+    final int toplamGun = (stokMiktari / dozSayisi).ceil();
 
     final DateTime bitisTarihi =
         baslangicTarihi.add(Duration(days: toplamGun));
@@ -191,6 +194,8 @@ class MedicineModel {
       stokUyariTarihi: stokUyariTarihi,
       // Yeni kayıtta sonDurum varsayılan olarak 'bekleniyor'
       sonDurum: IlacDurum.bekleniyor,
+      acTokDurumu: acTokDurumu,
+      kullanimSaatleri: kullanimSaatleri,
     );
   }
 
@@ -240,6 +245,13 @@ class MedicineModel {
       bitis.subtract(const Duration(days: 3)),
     );
 
+    // Geriye dönük uyumluluk: kullanimSaatleri null gelirse boş liste ata
+    final List<String> saatler =
+        (map['kullanimSaatleri'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        [];
+
     return MedicineModel(
       id: id,
       yasliId: map['yasliId'] as String? ?? '',
@@ -262,6 +274,8 @@ class MedicineModel {
       olusturmaTarihi: map['olusturmaTarihi'] is Timestamp
           ? (map['olusturmaTarihi'] as Timestamp).toDate()
           : null,
+      acTokDurumu: map['acTokDurumu'] as String? ?? 'Farketmez',
+      kullanimSaatleri: saatler,
     );
   }
 
@@ -291,6 +305,8 @@ class MedicineModel {
           ? Timestamp.fromDate(sonDurumZamani!)
           : null,
       'olusturmaTarihi': FieldValue.serverTimestamp(),
+      'acTokDurumu': acTokDurumu,
+      'kullanimSaatleri': kullanimSaatleri,
     };
   }
 
@@ -315,6 +331,8 @@ class MedicineModel {
     String? sonDurum,
     DateTime? sonDurumZamani,
     DateTime? olusturmaTarihi,
+    String? acTokDurumu,
+    List<String>? kullanimSaatleri,
   }) {
     return MedicineModel(
       id: id ?? this.id,
@@ -333,6 +351,8 @@ class MedicineModel {
       sonDurum: sonDurum ?? this.sonDurum,
       sonDurumZamani: sonDurumZamani ?? this.sonDurumZamani,
       olusturmaTarihi: olusturmaTarihi ?? this.olusturmaTarihi,
+      acTokDurumu: acTokDurumu ?? this.acTokDurumu,
+      kullanimSaatleri: kullanimSaatleri ?? this.kullanimSaatleri,
     );
   }
 

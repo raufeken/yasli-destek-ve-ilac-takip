@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/firestore_service.dart';
+import '../services/fcm_service.dart';
 import 'yasli_ana_ekran.dart';
 import 'yakin_ana_ekran.dart';
 
@@ -72,6 +73,8 @@ class _ProfilBilgiEkraniState extends State<ProfilBilgiEkrani> {
         });
         return;
       }
+
+      await FcmService().saveTokenForCurrentUser();
 
       // Basarili - ana ekrana yonlendir
       if (mounted) {
@@ -163,8 +166,10 @@ class _ProfilBilgiEkraniState extends State<ProfilBilgiEkrani> {
                         Text(
                           'Bu bilgiler profilinizde görünecektir',
                           textAlign: TextAlign.center,
-                          style:
-                              TextStyle(fontSize: 16, color: Colors.grey[600]),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                          ),
                         ),
 
                         const SizedBox(height: 30),
@@ -185,8 +190,11 @@ class _ProfilBilgiEkraniState extends State<ProfilBilgiEkrani> {
                           style: const TextStyle(fontSize: 20),
                           decoration: InputDecoration(
                             hintText: 'Örn: Ahmet Yılmaz',
-                            prefixIcon:
-                                Icon(Icons.person, color: temaRenk, size: 28),
+                            prefixIcon: Icon(
+                              Icons.person,
+                              color: temaRenk,
+                              size: 28,
+                            ),
                             filled: true,
                             fillColor: Colors.white,
                             border: OutlineInputBorder(
@@ -195,7 +203,9 @@ class _ProfilBilgiEkraniState extends State<ProfilBilgiEkrani> {
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(
-                                  color: Colors.grey[400]!, width: 2),
+                                color: Colors.grey[400]!,
+                                width: 2,
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -252,7 +262,9 @@ class _ProfilBilgiEkraniState extends State<ProfilBilgiEkrani> {
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(
-                                  color: Colors.grey[400]!, width: 2),
+                                color: Colors.grey[400]!,
+                                width: 2,
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -296,7 +308,8 @@ class _ProfilBilgiEkraniState extends State<ProfilBilgiEkrani> {
                                   child: CircularProgressIndicator(
                                     strokeWidth: 3,
                                     valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white),
+                                      Colors.white,
+                                    ),
                                   ),
                                 )
                               : const Text(

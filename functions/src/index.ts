@@ -18,6 +18,125 @@ admin.initializeApp();
 const db = admin.firestore();
 const messaging = admin.messaging();
 
+// Mobil uygulama Ilaclar/{ilacId}.sonDurum alanini guncelliyor.
+// Bu trigger, atlandi/zaman_asimi durumlarini yakina FCM olarak iletir.
+export const onIlacDurumDegisti = functions
+    .region("europe-west1")
+    .firestore.document("Ilaclar/{ilacId}")
+    .onUpdate(async (change, context) => {
+        const oncekiVeri = change.before.data();
+        const yeniVeri = change.after.data();
+        const ilacId = context.params.ilacId;
+
+        const oncekiDurum = String(oncekiVeri["sonDurum"] ?? "");
+        const yeniDurum = String(yeniVeri["sonDurum"] ?? "");
+
+        if (oncekiDurum === yeniDurum) {
+            return null;
+        }
+
+        if (yeniDurum !== "atlandi" && yeniDurum !== "zaman_asimi") {
+            return null;
+        }
+
+        const sonBildirimTipi = String(yeniVeri["sonBildirimTipi"] ?? "");
+        if (sonBildirimTipi === yeniDurum) {
+            functions.logger.info(
+                `[onIlacDurumDegisti] Bildirim zaten gonderilmis: ilacId=${ilacId}, durum=${yeniDurum}`
+            );
+            return null;
+        }
+
+        const yasliId = String(yeniVeri["yasliId"] ?? "");
+        if (!yasliId) {
+            functions.logger.warn(
+                `[onIlacDurumDegisti] yasliId yok, bildirim atlandi: ilacId=${ilacId}`
+            );
+            return null;
+        }
+
+        const yasliDoc = await db.collection("Kullanicilar").doc(yasliId).get();
+        if (!yasliDoc.exists) {
+            functions.logger.warn(
+                `[onIlacDurumDegisti] Yasli dokumani bulunamadi: yasliId=${yasliId}`
+            );
+            return null;
+        }
+
+        const yasliVeri = yasliDoc.data() ?? {};
+        const yasliIsim = String(
+            yasliVeri["adSoyad"] ?? yasliVeri["isim"] ?? "Yasli"
+        );
+        const takipciIdleri = (yasliVeri["takipciIdleri"] as string[]) ?? [];
+
+        if (takipciIdleri.length === 0) {
+            functions.logger.info(
+                `[onIlacDurumDegisti] Takipci yok, bildirim atlandi: yasliId=${yasliId}`
+            );
+            return null;
+        }
+
+        const takipciDokumanlari = await Promise.all(
+            takipciIdleri.map((uid) => db.collection("Kullanicilar").doc(uid).get())
+        );
+
+        const tokenlar: string[] = [];
+        for (const takipciDoc of takipciDokumanlari) {
+            if (!takipciDoc.exists) continue;
+            const fcmToken = String(takipciDoc.data()?.["fcmToken"] ?? "");
+            if (fcmToken.trim().length > 0) {
+                tokenlar.push(fcmToken);
+            }
+        }
+
+        if (tokenlar.length === 0) {
+            functions.logger.info(
+                `[onIlacDurumDegisti] Gecerli FCM token yok, bildirim atlandi: yasliId=${yasliId}`
+            );
+            return null;
+        }
+
+        const ilacAdi = String(yeniVeri["ilacAdi"] ?? "").trim();
+        const atlandiMi = yeniDurum === "atlandi";
+        const title = atlandiMi
+            ? "\u0130la\u00e7 atland\u0131"
+            : "\u0130la\u00e7 zaman\u0131 ge\u00e7ti";
+        const body = ilacAdi
+            ? `${yasliIsim} i\u00e7in ${ilacAdi} ${atlandiMi ? "atland\u0131" : "zaman\u0131 ge\u00e7ti"}.`
+            : `${yasliIsim} i\u00e7in bir ila\u00e7 ${atlandiMi ? "atland\u0131" : "zaman\u0131 ge\u00e7ti"}.`;
+
+        const mesaj: admin.messaging.MulticastMessage = {
+            tokens: tokenlar,
+            notification: { title, body },
+            android: {
+                priority: "high",
+                notification: {
+                    sound: "default",
+                    channelId: "ilac_kritik_uyari",
+                    clickAction: "FLUTTER_NOTIFICATION_CLICK",
+                },
+            },
+            data: {
+                ilacId,
+                yasliUid: yasliId,
+                sonDurum: yeniDurum,
+                tip: atlandiMi ? "ILAC_ATLANDI" : "ILAC_ZAMANI_GECTI",
+            },
+        };
+
+        const sonuc = await messaging.sendEachForMulticast(mesaj);
+        functions.logger.info(
+            `[onIlacDurumDegisti] FCM sonucu: basarili=${sonuc.successCount}, basarisiz=${sonuc.failureCount}, ilacId=${ilacId}`
+        );
+
+        await change.after.ref.update({
+            sonBildirimTipi: yeniDurum,
+            sonBildirimZamani: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return null;
+    });
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ZAMAN YARDIMCI FONKSİYONLARI
 // ─────────────────────────────────────────────────────────────────────────────
